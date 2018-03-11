@@ -32,7 +32,7 @@
 %% construct data for synthetic data experiment in Chadrasekaran et al.
 % 2012 - Ming Yuan Georgia Tech, section 6.1 - 36-cycle, 2 latent variables
 
-p = 50;
+p = 15;
 h = 2;
 S = zeros(p+h);
 r = 0.2;
@@ -72,12 +72,10 @@ n = 10*p;
 % XU is [p+h x n] synthetic data
 XU = (randn(n, p+h) * chol(C))'; 
 X = XU(1:p,:);
-threshold = 1e-6;
-close all;
 
 % --- solve with lvglasso ---
 C_sample = 1/(n-1)*(X*X');
-params_lvglasso.alpha_sweep = 0.3;%logspace(-3,3,5);
+params_lvglasso.alpha_sweep = 100;%logspace(-3,3,5);
 params_lvglasso.beta_sweep = 1;%logspace(-3,3,5);
 for ia = 1:length(params_lvglasso.alpha_sweep)
   for ib = 1:length(params_lvglasso.beta_sweep)
@@ -87,12 +85,13 @@ for ia = 1:length(params_lvglasso.alpha_sweep)
     alpha = params_lvglasso.alpha_sweep(ia);
     beta = params_lvglasso.beta_sweep(ib);
     [S_predicted,L,info] = lvglasso(C_sample, alpha, beta);
-    S_predicted(S_predicted < threshold) = 0;
+    S_predicted >
     figure;
     plot(graph(S(1:p,1:p)),'XData',locs(:,1),'YData',locs(:,2));
     title('True Graph')
     figure;
     plot(graph(S_predicted(1:p,1:p)),'XData',locs(:,1),'YData',locs(:,2));
     title('Predicted')
+    close all
   end
 end

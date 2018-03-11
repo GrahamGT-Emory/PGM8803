@@ -10,8 +10,8 @@ function [S, L , info] = lvglasso(C, alpha, beta)
   p = size(C,1);
   triu_mask = logical(ones(p)-tril(ones(p)));
   cvx_begin 
-    variable S(p,p) complex symmetric semidefinite
-    variable L(p,p) complex symmetric semidefinite 
+    variable S(p,p) semidefinite
+    variable L(p,p) semidefinite 
     minimize ( trace((S - L) * C) - log_det(S - L) ...
       + alpha*norm(S(triu_mask),1) + beta*trace(L))  
   cvx_end
