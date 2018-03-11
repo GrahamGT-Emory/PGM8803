@@ -21,7 +21,7 @@ end
 
 
 % --- calculate DFTs ---
-D = 1/sqrt(T)*fft(X,[],2);
+D = 1/sqrt(T)*fft(X,nf,2);
 
 
 % --- calculate periodogram ---
