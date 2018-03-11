@@ -7,7 +7,7 @@
 
 function [S, L , info] = lvglasso(C, alpha, beta)
 
-  p = size(C);
+  p = size(C,1);
   triu_mask = logical(ones(p)-tril(ones(p)));
   cvx_begin 
     variable S(p,p) complex symmetric semidefinite
