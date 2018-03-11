@@ -32,7 +32,7 @@
 %% construct data for synthetic data experiment in Chadrasekaran et al.
 % 2012 - Ming Yuan Georgia Tech, section 6.1 - 36-cycle, 2 latent variables
 
-p = 50;
+p = 15;
 h = 2;
 S = zeros(p+h);
 r = 0.2;
@@ -61,14 +61,14 @@ for ii = (p+1):(p+h)
         if ii == jj
             S(ii, jj) = 1;
         else
-            S(ii, jj) = r;
+            S(ii, jj) = 0;
         end
         
     end
 end
 
 C = inv(S);
-n = 10*p;
+n = 5*p;
 % XU is [p+h x n] synthetic data
 XU = (randn(n, p+h) * chol(C))'; 
 X = XU(1:p,:);
@@ -86,13 +86,34 @@ for ia = 1:length(params_lvglasso.alpha_sweep)
       ib, length(params_lvglasso.beta_sweep));
     alpha = params_lvglasso.alpha_sweep(ia);
     beta = params_lvglasso.beta_sweep(ib);
-    [S_predicted,L,info] = lvglasso(C_sample, alpha, beta);
-    S_predicted(S_predicted < threshold) = 0;
-    figure;
-    plot(graph(S(1:p,1:p)),'XData',locs(:,1),'YData',locs(:,2));
-    title('True Graph')
-    figure;
-    plot(graph(S_predicted(1:p,1:p)),'XData',locs(:,1),'YData',locs(:,2));
-    title('Predicted')
+    [S_lvglasso,L_lvglasso,info_lvglasso] = lvglasso(C_sample, alpha, beta);
+    S_lvglasso(S_lvglasso < threshold) = 0;
+    
+    [S_glasso, info_glass] = glasso(C_sample, alpha);
+    S_glasso(S_glasso < threshold) = 0;
+    
+%     targets = S(1:p, 1:p) > 0;
+%     targets = targets(:)+1;
+%     outputs = zeros(2, length(targets));
+%     bin_mask = S_lvglasso(1:p,1:p) > 0;
+%     bin_mask = bin_mask(:);
+%     for ii = 1:length(outputs)
+%         outputs(bin_mask(ii)+1,ii) = 1;
+%     end
+%      [tpr, fpr] = roc(targets', outputs);
+%      metric = tpr(2);
   end
 end
+figure;
+subplot 221
+G = graph(S(1:p,1:p));
+plot(G,'XData',locs(:,1),'YData',locs(:,2),'LineWidth', G.Edges.Weight);
+title('True Graph')
+subplot 222
+G= graph(S_lvglasso(1:p,1:p));
+plot(G,'XData',locs(:,1),'YData',locs(:,2),'LineWidth', G.Edges.Weight);
+title('LV-Glasso')
+subplot 223
+G = graph(S_glasso(1:p,1:p));
+plot(G,'XData',locs(:,1),'YData',locs(:,2),'LineWidth', G.Edges.Weight);
+title('Glasso')

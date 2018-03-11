@@ -6,10 +6,10 @@
 
 function [S, info] = glasso(C,lambda)
 
-  p = size(C);
+  p = size(C,1);
   triu_mask = logical(ones(p)-tril(ones(p)));
   cvx_begin
-    variable S(p,p) symmetric
+    variable S(p,p) symmetric semidefinite
     minimize ( -log_det(S) + trace(S*C) + ...
       lambda*norm(S(triu_mask),1) )
   cvx_end
