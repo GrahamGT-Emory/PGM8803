@@ -1,15 +1,31 @@
+function calculateSpectralDensity(X,nf,ww)
 % calculate estimated spectral density
+% INPUTS
+%   X   : p x T matrix of time series data
+%   nf  : (optional) # frequency bins to use (default: T)
+%   ww  : (optional) nf x 1 window (default: hanning)
+% OUTPUTS
+%   Psi : p x p x F matrix of est. cross-spectral density
+%         notation from Foti et al. 2016:
+%          - Psi[f]      is Psi(:,:,f)
+%          - Psi[.]_{ij} is Psi(i,j,:)
 
-% --- parameters ---
-F = T;
-useFFT = true;
-ww = hann(F); % TODO - tune length
+% --- parse inputs ---
+[p,T] = size(X);
+if nargin < 2
+  nf = T;
+end
+if nargin < 3
+  ww = hann(nf);
+end
+
 
 % --- calculate DFTs ---
 D = 1/sqrt(T)*fft(X,[],2);
 
+
 % --- calculate periodogram ---
-I = zeros(p,p,F);
+I = zeros(p,p,nf);
 for i = 1:p
   for j = 1:p
     I(i,j,:) = D(i,:) .* conj(D(j,:));
@@ -17,9 +33,6 @@ for i = 1:p
 end
 
 % --- calculate smoothed periodogram ---
-S = I .* reshape(ww/sum(ww),[1 1 F]);
-Psi = S;
+Psi = I .* reshape(ww/sum(ww),[1 1 nf]);
 
-% notation from Foti et al. 2016:
-%  - Psi[f]      is Psi(:,:,f)
-%  - Psi[.]_{ij} is Psi(i,j,:)
+end
