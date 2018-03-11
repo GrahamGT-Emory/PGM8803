@@ -1,42 +1,38 @@
+function Psi = calculateSpectralDensity(X,nf,ww)
 % calculate estimated spectral density
+% INPUTS
+%   X   : p x T matrix of time series data
+%   nf  : (optional) # frequency bins to use (default: T)
+%   ww  : (optional) nf x 1 window (default: hanning)
+% OUTPUTS
+%   Psi : p x p x F matrix of est. cross-spectral density
+%         notation from Foti et al. 2016:
+%          - Psi[f]      is Psi(:,:,f)
+%          - Psi[.]_{ij} is Psi(i,j,:)
 
-% --- parameters ---
-F = T;
-useFFT = true;
-ww = hann(F); % TODO - in freq domain?, also, tune length
+% --- parse inputs ---
+[p,T] = size(X);
+if nargin < 2
+  nf = T;
+end
+if nargin < 3
+  ww = hann(nf);
+end
 
 
-% --- calculate periodogram I(wk) ---
-tic;
-kk = 0:T-1;
-tt = 0:T-1;
-I = zeros(p,p,F);
-S = zeros(p,p,F);
+% --- calculate DFTs ---
+D = 1/sqrt(T)*fft(X,[],2);
+
+
+% --- calculate periodogram ---
+I = zeros(p,p,nf);
 for i = 1:p
-  % calculate DFT dd (T x 1)
-  if useFFT
-    dd = 1/sqrt(T)*shiftdim(fft(X(i,:)),1);
-  else
-    dd = zeros(T,1);
-    for ik = 1:T
-      k = kk(ik);
-      for it = 1:T
-        t = tt(it);
-        wk = 2*pi*k/T;
-        dd(ik) = dd(ik) + 1/sqrt(T)*X(i,it)*exp(-1j*wk*t);
-      end
-    end
+  for j = 1:p
+    I(i,j,:) = D(i,:) .* conj(D(j,:));
   end
-  % calculate periodogram
-  I(:,:,i) = 1/(2*pi)*dd.*conj(dd);
 end
 
+% --- calculate smoothed periodogram ---
+Psi = I .* reshape(ww/sum(ww),[1 1 nf]);
 
-% --- calculate smoothed periodogram
-for i = 1:p
-  S(:,:,i) = ww.*I(:,:,i);
 end
-
-
-
-
