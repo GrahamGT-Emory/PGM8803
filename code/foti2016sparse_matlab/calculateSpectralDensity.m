@@ -1,4 +1,4 @@
-function calculateSpectralDensity(X,nf,ww)
+function Psi = calculateSpectralDensity(X,nf,ww)
 % calculate estimated spectral density
 % INPUTS
 %   X   : p x T matrix of time series data
