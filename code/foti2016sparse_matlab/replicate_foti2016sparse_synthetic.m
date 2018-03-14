@@ -40,19 +40,23 @@ clearvars A B C D Astar e i ind sigma snr t XU
 
 
 % --- solve with lvglasso ---
-C = 1/(T-1)*(X*X');
-params_lvglasso.alpha_sweep = 1; %logspace(-3,3,5);
-params_lvglasso.beta_sweep = 1; %logspace(-3,3,5);
-for ia = 1:length(params_lvglasso.alpha_sweep)
-  for ib = 1:length(params_lvglasso.beta_sweep)
-    fprintf('alpha %d/%d, beta %d/%d\n', ...
-      ia, length(params_lvglasso.alpha_sweep), ...
-      ib, length(params_lvglasso.beta_sweep));
-    alpha = params_lvglasso.alpha_sweep(ia);
-    beta = params_lvglasso.beta_sweep(ib);
-    [S,L,info] = lvglasso(C, alpha, beta);
-  end
-end
+% C = 1/(T-1)*(X*X');
+% params_lvglasso.alpha_sweep = 1; %logspace(-3,3,5);
+% params_lvglasso.beta_sweep = 1; %logspace(-3,3,5);
+% for ia = 1:length(params_lvglasso.alpha_sweep)
+%   for ib = 1:length(params_lvglasso.beta_sweep)
+%     fprintf('alpha %d/%d, beta %d/%d\n', ...
+%       ia, length(params_lvglasso.alpha_sweep), ...
+%       ib, length(params_lvglasso.beta_sweep));
+%     alpha = params_lvglasso.alpha_sweep(ia);
+%     beta = params_lvglasso.beta_sweep(ib);
+%     [S,L,info] = lvglasso(C, alpha, beta);
+%   end
+% end
 
 
 % --- solve with lvsglasso ---
+Psi = calculateSpectralDensity(X,64);
+[L,S] = lvsglasso_admm(Psi,1,1,true);
+
+
