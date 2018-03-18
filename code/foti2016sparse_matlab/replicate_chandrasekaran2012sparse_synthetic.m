@@ -33,7 +33,7 @@
 % 2012 - Ming Yuan Georgia Tech, section 6.1 - 36-cycle, 2 latent variables
 clc; clear;
 
-p = 15;
+p = 8;
 h = 2;
 S = eye(p+h);
 r = 0.2;
@@ -45,7 +45,6 @@ for ii = 1:p
         if ii < jj
             add_edge = rand() < (2 * normpdf(norm(locs(ii,:) - locs(jj,:),2) * sqrt(p)));
             S(ii, jj) = r * add_edge;
-%             S(jj,ii) = r * add_edge;
         end
     end
 end
@@ -65,7 +64,7 @@ S = (S + S') - (eye(p+h).*diag(S));
 subset_percent = 1;
 for ii = (p+1):(p+h)
     ind = randperm(p,round(subset_percent*p));
-    vals = 0.3*rand(1,round(subset_percent*p));
+    vals = 0.12*rand(1,round(subset_percent*p));
     S(ind,ii) = vals;
     S(ii, ind) = vals;
     for jj = (p+1):(p+h)
@@ -82,67 +81,78 @@ S_obs_marginal = S(1:p,1:p) - (S(1:p,p+1:end)*inv(S(p+1:end,p+1:end))*S(p+1:end,
 C = inv(S_obs_marginal);
 % unity variances`
 
-n = 50*(p); % from meinshausen 2006, pg 1449
+n = 2000;%0.6*(p); % from meinshausen 2006, pg 1449
 % X is [p x n] synthetic data
 X = (randn(n, p) * chol(C))'; 
 threshold = 1e-9;
-close all;
 
 
-subplot 221
-G = graph(S(1:p,1:p));
-plot(G,'XData',locs(:,1),'YData',locs(:,2),'LineWidth', G.Edges.Weight);
-title('True Graph')
 
 %% Optimization
-best_f1_lv = 0;
+
+C_sample = (1/(n-1))*(X*X');
+params_glasso.alpha_sweep = logspace(-1,0,10);
+params_lvglasso.alpha_sweep = logspace(-1,0,4);
+params_lvglasso.beta_sweep = logspace(-1,0,4);
+lv_history = [];
+glasso_history = [];
 best_f1_glasso = 0;
-C_sample = 1/(n-1)*(X*X');
-params_lvglasso.alpha_sweep = 0.8;%logspace(-1,0,4);
-params_lvglasso.beta_sweep = 0.3;%logspace(0,1,10);
+
 for ia = 1:length(params_lvglasso.alpha_sweep)
-    
   targets = abs(S(1:p, 1:p)) > threshold;
   for ib = 1:length(params_lvglasso.beta_sweep)
-    fprintf('alpha %d/%d, beta %d/%d\n', ...
-      ia, length(params_lvglasso.alpha_sweep), ...
-      ib, length(params_lvglasso.beta_sweep));
     alpha = params_lvglasso.alpha_sweep(ia);
     beta = params_lvglasso.beta_sweep(ib);
     % --- solve with lvglasso ---
     [S_lv,L_lvglasso,info_lvglasso] = lvglasso(C_sample, alpha, beta);
+    [f1_score] = evaluateGraph(abs(S_lv) > threshold, targets);
     
-    [fl_score] = evaluateGraph(abs(S_lv) > threshold, targets);
-    if fl_score > best_f1_lv
-        best_S_lv = S_lv;
-        best_f1_lv = fl_score;
-        best_param_lv = [ia, ib];
-        subplot 222
-        G = graph(abs(best_S_lv) > threshold);
-        plot(G,'XData',locs(:,1),'YData',locs(:,2));
-        title('LV-Glasso')
-        pause(0.1)
-    end
-    % Only depends on first loop parameters
-    if ib == 1
-        % --- solve with glasso ---
-        [S_glasso, info_glass] = glasso(C_sample, alpha);
-        
-        [fl_score] = evaluateGraph(abs(S_glasso) > threshold, targets);
-        if fl_score > best_f1_glasso
-            best_S_glasso = S_glasso;
-            best_f1_glasso = fl_score;
-            best_param_glasso = [ia];
-            subplot 223
-            G = graph(abs(best_S_glasso) > threshold);
-            plot(G,'XData',locs(:,1),'YData',locs(:,2));
-            title('Glasso')
-            pause(0.1)
-        end
-    end
+    % Create struct
+    meta_data = struct();
+    meta_data.alpha = alpha;
+    meta_data.beta = beta;
+    meta_data.f1 = f1_score;
+    meta_data.S = S_lv;
+    meta_data.L = L_lvglasso;
+    meta_data.info = info_lvglasso;
+    lv_history = [lv_history meta_data]; %#ok<*AGROW>
   end
 end
 
+for ia = 1:length(params_glasso.alpha_sweep)
+    alpha = params_glasso.alpha_sweep(ia);
+    % --- solve with glasso ---
+    [S_glasso,info_glasso] = glasso(C_sample, alpha);
+    [f1_score] = evaluateGraph(abs(S_glasso) > threshold, targets);
+    
+    % Create struct
+    meta_data = struct();
+    meta_data.alpha = alpha;
+    meta_data.f1 = f1_score;
+    meta_data.S = S_glasso;
+    meta_data.info = info_glasso;
+    glasso_history = [glasso_history meta_data]; %#ok<*AGROW>
+end
+
+%% Plot results
+
+close all;
+subplot 221
+G = graph(abs(S(1:p,1:p)) > threshold);
+plot(G,'XData',locs(:,1),'YData',locs(:,2));
+title('True Graph')
+
+subplot 222
+[~, loc] = max([lv_history.f1]);
+G = graph(abs(lv_history(loc).S) > threshold);
+plot(G,'XData',locs(:,1),'YData',locs(:,2));
+title('LV-Glasso')
+
+subplot 223
+[~, loc] = max([glasso_history.f1]);
+G = graph(abs(glasso_history(loc).S) > threshold);
+plot(G,'XData',locs(:,1),'YData',locs(:,2));
+title('Glasso')
 
 
 
