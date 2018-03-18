@@ -33,7 +33,7 @@
 % 2012 - Ming Yuan Georgia Tech, section 6.1 - 36-cycle, 2 latent variables
 clc; clear;
 
-p = 8;
+p = 10;
 h = 2;
 S = eye(p+h);
 r = 0.2;
@@ -81,7 +81,7 @@ S_obs_marginal = S(1:p,1:p) - (S(1:p,p+1:end)*inv(S(p+1:end,p+1:end))*S(p+1:end,
 C = inv(S_obs_marginal);
 % unity variances`
 
-n = 2000;%0.6*(p); % from meinshausen 2006, pg 1449
+n = 0.6*(p.^2); % from meinshausen 2006, pg 1449
 % X is [p x n] synthetic data
 X = (randn(n, p) * chol(C))'; 
 threshold = 1e-9;
@@ -92,8 +92,8 @@ threshold = 1e-9;
 
 C_sample = (1/(n-1))*(X*X');
 params_glasso.alpha_sweep = logspace(-1,0,10);
-params_lvglasso.alpha_sweep = logspace(-1,0,4);
-params_lvglasso.beta_sweep = logspace(-1,0,4);
+params_lvglasso.alpha_sweep = logspace(-1,0,5);
+params_lvglasso.beta_sweep = logspace(-1,0,5);
 lv_history = [];
 glasso_history = [];
 best_f1_glasso = 0;
@@ -115,6 +115,7 @@ for ia = 1:length(params_lvglasso.alpha_sweep)
     meta_data.S = S_lv;
     meta_data.L = L_lvglasso;
     meta_data.info = info_lvglasso;
+    meta_data.obj = info_lvglasso.obj;
     lv_history = [lv_history meta_data]; %#ok<*AGROW>
   end
 end
@@ -131,6 +132,7 @@ for ia = 1:length(params_glasso.alpha_sweep)
     meta_data.f1 = f1_score;
     meta_data.S = S_glasso;
     meta_data.info = info_glasso;
+    meta_data.obj = info_glasso.obj;
     glasso_history = [glasso_history meta_data]; %#ok<*AGROW>
 end
 
@@ -143,13 +145,15 @@ plot(G,'XData',locs(:,1),'YData',locs(:,2));
 title('True Graph')
 
 subplot 222
-[~, loc] = max([lv_history.f1]);
+bic_lv = log(n)*length(lv_history) - 2*log([lv_history.obj]);
+[~, loc] = min(bic_lv);
 G = graph(abs(lv_history(loc).S) > threshold);
 plot(G,'XData',locs(:,1),'YData',locs(:,2));
 title('LV-Glasso')
 
 subplot 223
-[~, loc] = max([glasso_history.f1]);
+bic_glasso = log(n)*length(glasso_history) - 2*log([glasso_history.obj]);
+[~, loc] = min(bic_glasso);
 G = graph(abs(glasso_history(loc).S) > threshold);
 plot(G,'XData',locs(:,1),'YData',locs(:,2));
 title('Glasso')
