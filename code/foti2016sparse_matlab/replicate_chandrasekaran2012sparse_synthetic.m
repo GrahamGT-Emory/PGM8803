@@ -102,46 +102,52 @@ best_f1_glasso = 0;
 opts.continuation = 1; opts.mu = n; opts.num_continuation = 10; opts.eta = 1/4; opts.muf = 1e-6;
 opts.maxiter = 500; opts.stoptol = 1e-5; opts.over_relax_par = 1.6; 
 
-for ia = 1:length(params_lvglasso.alpha_sweep)
-  targets = abs(S(1:p, 1:p)) > threshold;
-  for ib = 1:length(params_lvglasso.beta_sweep)
-    alpha = params_lvglasso.alpha_sweep(ia);
-    beta = params_lvglasso.beta_sweep(ib);
-    % --- solve with lvglasso ---
-    out_B = ADMM_B(C_sample,alpha,beta,opts);
-    S_lv = out_B.S;  L_lvglasso = out_B.L; 
-    info_lvglasso = struct();  info_lvglasso.obj = out_B.obj;
-%     [S_lv,L_lvglasso,info_lvglasso] = lvglasso(C_sample, alpha, beta);
-    [f1_score] = evaluateGraph(abs(S_lv) > threshold, targets);
-    
-    % Create struct
-    meta_data = struct();
-    meta_data.alpha = alpha;
-    meta_data.beta = beta;
-    meta_data.f1 = f1_score;
-    meta_data.S = S_lv;
-    meta_data.L = L_lvglasso;
-    meta_data.info = info_lvglasso;
-    meta_data.obj = info_lvglasso.obj;
-    lv_history = [lv_history meta_data]; %#ok<*AGROW>
-  end
-end
-
-% for ia = 1:length(params_glasso.alpha_sweep)
-%     alpha = params_glasso.alpha_sweep(ia);
-%     % --- solve with glasso ---
-%     [S_glasso,info_glasso] = glasso(C_sample, alpha);
-%     [f1_score] = evaluateGraph(abs(S_glasso) > threshold, targets);
+% for ia = 1:length(params_lvglasso.alpha_sweep)
+%   targets = abs(S(1:p, 1:p)) > threshold;
+%   for ib = 1:length(params_lvglasso.beta_sweep)
+%     alpha = params_lvglasso.alpha_sweep(ia);
+%     beta = params_lvglasso.beta_sweep(ib);
+%     % --- solve with lvglasso ---
+%     out_B = ADMM_B(C_sample,alpha,beta,opts);
+%     S_lv = out_B.S;  L_lvglasso = out_B.L; 
+%     info_lvglasso = struct();  info_lvglasso.obj = out_B.obj;
+% %     [S_lv,L_lvglasso,info_lvglasso] = lvglasso(C_sample, alpha, beta);
+%     [f1_score] = evaluateGraph(abs(S_lv) > threshold, targets);
 %     
 %     % Create struct
 %     meta_data = struct();
 %     meta_data.alpha = alpha;
+%     meta_data.beta = beta;
 %     meta_data.f1 = f1_score;
-%     meta_data.S = S_glasso;
-%     meta_data.info = info_glasso;
-%     meta_data.obj = info_glasso.obj;
-%     glasso_history = [glasso_history meta_data]; %#ok<*AGROW>
+%     meta_data.S = S_lv;
+%     meta_data.L = L_lvglasso;
+%     meta_data.info = info_lvglasso;
+%     meta_data.obj = info_lvglasso.obj;
+%     lv_history = [lv_history meta_data]; %#ok<*AGROW>
+%   end
 % end
+
+for ia = 1:length(params_glasso.alpha_sweep)
+    alpha = params_glasso.alpha_sweep(ia);
+    % --- solve with glasso ---
+%     [S_glasso,info_glasso] = glasso(C_sample, alpha);
+    numVars = 100; s = C_sample; computePath = 0; lambda = alpha; 
+    approximate = 1; warmInit = false; verbose = 1; penalDiag = 0; 
+    tolThreshold = opts.stoptol; maxIter = opts.maxiter;
+    [~, S_glasso, iter, avgTol, hasError] = glasso(numVars, s, computePath, lambda, approximate, warmInit, verbose, penalDiag, tolThreshold, maxIter);
+    
+    [f1_score] = evaluateGraph(abs(S_glasso) > threshold, targets);
+    info_glasso.obj = f1_score;
+    
+    % Create struct
+    meta_data = struct();
+    meta_data.alpha = alpha;
+    meta_data.f1 = f1_score;
+    meta_data.S = S_glasso;
+    meta_data.info = info_glasso;
+    meta_data.obj = info_glasso.obj;
+    glasso_history = [glasso_history meta_data]; %#ok<*AGROW>
+end
 
 %% Plot results
 
