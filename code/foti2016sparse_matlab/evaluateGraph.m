@@ -1,5 +1,7 @@
 % Determines the mean F1 score for the graph based on existence of edges
 function [f1_score] = evaluateGraph(inferred_S, true_S)
+inferred_S = triu(inferred_S,1);
+true_S = triu(true_S,1);
 true_positives = sum(sum((inferred_S == 1) & (true_S == 1)));
 false_positives = sum(sum((inferred_S == 1) & (true_S == 0)));
 true_negatives = sum(sum((inferred_S == 0) & (true_S == 0)));

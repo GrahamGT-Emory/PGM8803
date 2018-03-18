@@ -13,7 +13,7 @@ function out = ADMM_B(SigmaO,alpha,beta,opts)
 % Date: Jan 25, 2013
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % initialization
-QUIET    = 1;
+QUIET    = 0;
 ABSTOL   = 1e-5;
 RELTOL   = 1e-5;
 n = size(SigmaO,1); R = eye(n,n); S = R; L = zeros(n,n);
