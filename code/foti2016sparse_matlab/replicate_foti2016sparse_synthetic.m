@@ -43,17 +43,17 @@ clearvars A B C D Astar e i ind sigma snr t
 
 
 % To avoid numerical errors, sets low values to 0 for plotting graphs
-threshold = 1e-2;
-C_actual = (1/(n-1))*(XU*XU');
+C_actual = (1/(T-1))*(XU*XU');
 S = inv(C_actual);
+threshold = quantile(real(S(:)),[0.95]);
 num_samples = 512;
-C_sample = (1/(n-1))*(X*X');
-params_lvglasso.alpha_sweep = logspace(-1,2.4,4);
-params_lvglasso.beta_sweep = logspace(-1,3,4);
+C_sample = (1/(num_samples-1))*(X(:,1:num_samples)*X(:,1:num_samples)');
+params_lvglasso.alpha_sweep = logspace(-1,2.4,5);
+params_lvglasso.beta_sweep = logspace(-1,3,5);
 lv_history = [];
 
 
-opts.continuation = 1; opts.mu = n; opts.num_continuation = 10; opts.eta = 1/4; opts.muf = 1e-6;
+opts.continuation = 1; opts.mu = num_samples; opts.num_continuation = 10; opts.eta = 1/4; opts.muf = 1e-6;
 opts.maxiter = 500; opts.stoptol = 1e-5; opts.over_relax_par = 1.6; 
 targets = abs(S(1:p, 1:p)) > threshold;
 
@@ -95,8 +95,8 @@ plot(G,'','NodeLabel',{});
 title('True Graph')
 
 subplot 222
-bic_lv = log(n)*length(lv_history) - 2*log([lv_history.obj]);
-[~, loc] = min(bic_lv);
+bic_lv = log(num_samples)*length(lv_history) - 2*log([lv_history.obj]);
+[~, loc] = max([lv_history.f1]);
 G = graph(abs(lv_history(loc).S) > threshold,'OmitSelfLoops');
 plot(G,'','NodeLabel',{});
 title('LV-Glasso')
