@@ -34,7 +34,7 @@
 clc; clear;
 
 p = 198;
-h = 1;
+h = 2;
 S = eye(p+h);
 r = 0.2;
 % p random locations on a 1x1 square
@@ -64,8 +64,10 @@ S = (S + S') - (eye(p+h).*diag(S));
 % Latent variables connected to random subset of observed variables
 subset_percent = 1;
 for ii = (p+1):(p+h)
+    ind = 1:p;
     ind = randperm(p,round(subset_percent*p));
-    vals = 0.12*rand(1,round(subset_percent*p));
+    vals = 0.11*rand(1,round(subset_percent*p));
+    vals = 0.11*rand(1,round(subset_percent*p));
     S(ind,ii) = vals;
     S(ii, ind) = vals;
     for jj = (p+1):(p+h)
@@ -78,13 +80,14 @@ for ii = (p+1):(p+h)
     end
 end
 
-S_obs_marginal = S(1:p,1:p) - (S(1:p,p+1:end)*inv(S(p+1:end,p+1:end))*S(p+1:end,1:p));
+% S_obs_marginal = S(1:p,1:p) - (S(1:p,p+1:end)*inv(S(p+1:end,p+1:end))*S(p+1:end,1:p));
+S_obs_marginal = S;
 C = inv(S_obs_marginal);
 % unity variances`
 
 n = round(0.6*(p.^2)); % from meinshausen 2006, pg 1449
 % X is [p x n] synthetic data
-X = (randn(n, p) * chol(C))'; 
+X = (randn(n, p) * chol(C(1:p,1:p)))'; 
 threshold = 1e-9;
 
 
@@ -92,50 +95,47 @@ threshold = 1e-9;
 %% Optimization
 
 C_sample = (1/(n-1))*(X*X');
-params_glasso.alpha_sweep = logspace(-1,0,10);
-params_lvglasso.alpha_sweep = logspace(1,3,8);
-params_lvglasso.beta_sweep = logspace(1,3,8);
+params_glasso.alpha_sweep = logspace(-1,2.4,10);
+params_lvglasso.alpha_sweep = logspace(-1,2.4,4);
+params_lvglasso.beta_sweep = logspace(-1,3,4);
 lv_history = [];
 glasso_history = [];
-best_f1_glasso = 0;
 
 opts.continuation = 1; opts.mu = n; opts.num_continuation = 10; opts.eta = 1/4; opts.muf = 1e-6;
 opts.maxiter = 500; opts.stoptol = 1e-5; opts.over_relax_par = 1.6; 
+targets = abs(S(1:p, 1:p)) > threshold;
 
-% for ia = 1:length(params_lvglasso.alpha_sweep)
-%   targets = abs(S(1:p, 1:p)) > threshold;
-%   for ib = 1:length(params_lvglasso.beta_sweep)
-%     alpha = params_lvglasso.alpha_sweep(ia);
-%     beta = params_lvglasso.beta_sweep(ib);
-%     % --- solve with lvglasso ---
-%     out_B = ADMM_B(C_sample,alpha,beta,opts);
-%     S_lv = out_B.S;  L_lvglasso = out_B.L; 
-%     info_lvglasso = struct();  info_lvglasso.obj = out_B.obj;
-% %     [S_lv,L_lvglasso,info_lvglasso] = lvglasso(C_sample, alpha, beta);
-%     [f1_score] = evaluateGraph(abs(S_lv) > threshold, targets);
-%     
-%     % Create struct
-%     meta_data = struct();
-%     meta_data.alpha = alpha;
-%     meta_data.beta = beta;
-%     meta_data.f1 = f1_score;
-%     meta_data.S = S_lv;
-%     meta_data.L = L_lvglasso;
-%     meta_data.info = info_lvglasso;
-%     meta_data.obj = info_lvglasso.obj;
-%     lv_history = [lv_history meta_data]; %#ok<*AGROW>
-%   end
-% end
+for ia = 1:length(params_lvglasso.alpha_sweep)
+  for ib = 1:length(params_lvglasso.beta_sweep)
+    alpha = params_lvglasso.alpha_sweep(ia);
+    beta = params_lvglasso.beta_sweep(ib);
+    % --- solve with lvglasso ---
+    out_B = ADMM_B(C_sample,alpha,beta,opts);
+    S_lv = out_B.S;  L_lvglasso = out_B.L; 
+    info_lvglasso = struct();  info_lvglasso.obj = out_B.obj;
+%     [S_lv,L_lvglasso,info_lvglasso] = lvglasso(C_sample, alpha, beta);
+    [f1_score] = evaluateGraph(abs(S_lv) > threshold, targets);
+    
+    % Create struct
+    meta_data = struct();
+    meta_data.alpha = alpha;
+    meta_data.beta = beta;
+    meta_data.f1 = f1_score;
+    meta_data.S = S_lv;
+    meta_data.L = L_lvglasso;
+    meta_data.info = info_lvglasso;
+    meta_data.obj = info_lvglasso.obj;
+    lv_history = [lv_history meta_data]; %#ok<*AGROW>
+  end
+end
 
 for ia = 1:length(params_glasso.alpha_sweep)
     alpha = params_glasso.alpha_sweep(ia);
     % --- solve with glasso ---
 %     [S_glasso,info_glasso] = glasso(C_sample, alpha);
-    numVars = 100; s = C_sample; computePath = 0; lambda = alpha; 
-    approximate = 1; warmInit = false; verbose = 1; penalDiag = 0; 
-    tolThreshold = opts.stoptol; maxIter = opts.maxiter;
-    [~, S_glasso, iter, avgTol, hasError] = glasso(numVars, s, computePath, lambda, approximate, warmInit, verbose, penalDiag, tolThreshold, maxIter);
-    
+    out_GL = ADMM_GLASSO(C_sample,alpha,opts);
+    S_glasso = out_GL.R;  
+    info_glasso = struct();  info_glasso.obj = out_GL.obj;
     [f1_score] = evaluateGraph(abs(S_glasso) > threshold, targets);
     info_glasso.obj = f1_score;
     
@@ -159,17 +159,17 @@ title('True Graph')
 
 subplot 222
 bic_lv = log(n)*length(lv_history) - 2*log([lv_history.obj]);
-[~, loc] = min(bic_lv);
+[~, loc] = max(bic_lv);
 G = graph(abs(lv_history(loc).S) > threshold);
 plot(G,'XData',locs(:,1),'YData',locs(:,2));
 title('LV-Glasso')
-% 
-% subplot 223
-% bic_glasso = log(n)*length(glasso_history) - 2*log([glasso_history.obj]);
-% [~, loc] = min(bic_glasso);
-% G = graph(abs(glasso_history(loc).S) > threshold);
-% plot(G,'XData',locs(:,1),'YData',locs(:,2));
-% title('Glasso')
+
+subplot 223
+bic_glasso = log(n)*length(glasso_history) - 2*log([glasso_history.obj]);
+[~, loc] = min(bic_glasso);
+G = graph(abs(glasso_history(loc).S) > threshold);
+plot(G,'XData',locs(:,1),'YData',locs(:,2));
+title('Glasso')
 
 
 
