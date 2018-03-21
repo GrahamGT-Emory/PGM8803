@@ -16,7 +16,7 @@ if nargin < 2
   nf = T;
 end
 if nargin < 3
-  ww = hann(nf);
+  ww = hann(round(0.125*nf));
 end
 
 
@@ -24,15 +24,15 @@ end
 D = 1/sqrt(T)*fft(X,nf,2);
 
 
-% --- calculate periodogram ---
-I = zeros(p,p,nf);
+% --- calculate smoothed periodogram ---
+Psi = zeros(p,p,nf);
 for i = 1:p
   for j = 1:p
-    I(i,j,:) = D(i,:) .* conj(D(j,:));
+     st = squeeze(D(i,:) .* conj(D(j,:)));
+     st = conv(st, ww/sum(ww),'same');
+     Psi(i,j,:) = reshape(st, [1 1 nf]);
   end
 end
 
-% --- calculate smoothed periodogram ---
-Psi = I .* reshape(ww/sum(ww),[1 1 nf]);
 
 end
