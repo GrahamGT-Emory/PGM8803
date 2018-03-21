@@ -154,14 +154,14 @@ title('True Graph')
 subplot 222
 bic_lv = log(n)*length(lv_history) - 2*log([lv_history.obj]);
 [~, loc] = max(bic_lv);
-G = graph(abs(lv_history(loc).S) > threshold,'OmitSelfLoops');
+G = graph(abs(lv_history(loc).S) > threshold);
 plot(G,'XData',locs(:,1),'YData',locs(:,2));
 title('LV-Glasso')
 
 subplot 223
 bic_glasso = log(n)*length(glasso_history) - 2*log([glasso_history.obj]);
 [~, loc] = min(bic_glasso);
-G = graph(abs(glasso_history(loc).S) > threshold,'OmitSelfLoops');
+G = graph(abs(glasso_history(loc).S) > threshold);
 plot(G,'XData',locs(:,1),'YData',locs(:,2));
 title('Glasso')
 

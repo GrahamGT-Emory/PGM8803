@@ -8,9 +8,9 @@
 addpath('../ma2013admlvglasso_matlab/');
 
 % --- params ---
-p = 69;
+p = 36; %69;
 r = 5;
-T = 10000;
+T = 10000; %512;
 snr = 2;
 
 % --- construct data ---
@@ -39,14 +39,13 @@ for t = 2:T
 end
 X = XU(1:p,:);
 U = XU(p+1:end,:);
-clearvars A B C D Astar e i ind sigma snr t 
+clearvars A B C D Astar e i ind sigma snr t XU
 
 
 % To avoid numerical errors, sets low values to 0 for plotting graphs
-threshold = 1e-2;
-C_actual = (1/(n-1))*(XU*XU');
-S = inv(C_actual);
-num_samples = 512;
+threshold = 1e-9;
+C_actual = (1/(n-1))*(X*X');
+num_samples = 3000;
 C_sample = (1/(n-1))*(X*X');
 params_lvglasso.alpha_sweep = logspace(-1,2.4,4);
 params_lvglasso.beta_sweep = logspace(-1,3,4);
@@ -81,28 +80,8 @@ for ia = 1:length(params_lvglasso.alpha_sweep)
 end
 
 
-% % --- solve with lvsglasso ---
-% Psi = calculateSpectralDensity(X,64);
-% [L,S] = lvsglasso_admm(Psi,1,1,true);
-
-
-%% Plot results
-
-close all;
-subplot 221
-G = graph(abs(S(1:p,1:p)) > threshold,'OmitSelfLoops');
-plot(G,'','NodeLabel',{});
-title('True Graph')
-
-subplot 222
-bic_lv = log(n)*length(lv_history) - 2*log([lv_history.obj]);
-[~, loc] = min(bic_lv);
-G = graph(abs(lv_history(loc).S) > threshold,'OmitSelfLoops');
-plot(G,'','NodeLabel',{});
-title('LV-Glasso')
-
-
-
-
+% --- solve with lvsglasso ---
+Psi = calculateSpectralDensity(X,64);
+[L,S] = lvsglasso_admm(Psi,1,1,true);
 
 
