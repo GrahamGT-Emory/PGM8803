@@ -1,0 +1,192 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% RWL1-DF Testing script
+%
+% This test script loads and subsamples a video sequence. The resulting
+% samples are used to recover the sequence using basis pursuit de-noising
+% (BPDN), re-weighted \ell_1 (RWL1), BPDN dynamic filtering (BPDN-DF) and
+% RWL1 dynamic filtering (RWL1-DF).
+% 
+% 
+% Code by Adam Charles, 
+% Department of Electrical and Computer Engineering,
+% Georgia Institute of Technology
+% 
+% Last updated August 20, 2012. 
+% 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Setup Parameters
+
+% Running Options 
+reset_samp = 1;
+same_samp = 0;
+calc_l1 = 1;
+calc_rwl1 = 1;
+calc_dl1 = 1;
+calc_drwl1 = 1;
+
+T_s = 10;            % Number of Frames
+num_trials = 1;      % Number of trials to average
+samp_factor = 0.25;  % Sampling rate
+noise_var = 0.0001;  % Measurement Noise Variance
+
+% General Parameters
+TOL = 1e-3;          % TFOCS tolerance parameter
+
+% Uncomment to use 4 level Daubechies Wavelet Transform
+% XFM = Wavelet('Daubechies',4,4);	
+% DWTfunc.apply = @(q) reshape(XFM*q, [], 1);
+% DWTfunc.invert = @(q) (XFM')*reshape(q, sqrt(N), sqrt(N));
+
+% Uncomment to use 4 level Dual-Tree Discrete Wavelet Transforms
+dwt_opts.J = 4;
+DWTfunc.apply = @(q) DTDWT2D_mat(q, dwt_opts.J);
+DWTfunc.invert = @(q) iDTDWT2D_mat(q, dwt_opts.J);
+
+% Choose video file (e.g. foreman in .qcif format)
+filename = 'foreman.qcif';
+
+% Initialize result arrays
+PSNR_ALL = zeros(T_s, 4, num_trials);
+rMSE_ALL = zeros(T_s, 4, num_trials);
+
+% Set dynamics function to identity
+f_dyn = @(z) z;
+DYN_FUN{1} = f_dyn;
+    
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Load Data
+
+for trial_index = 1:num_trials
+
+    if reset_samp == 1
+    % Load video
+    vid_t = yuv_import(filename, [176 144], T_s*num_trials);
+
+    % Extract the signals of interest
+    vid = cell(T_s);
+    for kk = 1:T_s
+        vid{kk} = vid_t{T_s*(trial_index-1)+kk};
+        vid{kk} = vid{kk}(1:128, 1:128);
+    end
+    clear vid_t
+
+    N = numel(vid{1});
+    M = ceil(samp_factor*N);
+
+    vid2 = zeros(size(vid{1}, 1), size(vid{1}, 2), T_s);
+    vid3 = zeros(M, 1, T_s);
+
+    % Noise options
+    OM = zeros(M, T_s);
+    MEAS_FUN = cell(T_s, 1);
+    for kk = 1:T_s
+        % Set up noiselets
+        q = randperm(N)';      % makes column vector of random integers 1:N
+        OM(:, kk) = q(1:M);    % vector of random subset of integers 1:N
+        Phi  = @(z) A_noiselet (z, OM(:, kk));
+        Phit = @(z) At_noiselet(z, OM(:, kk), N); 
+        meas_func.Phi = @(z) Phi(reshape(z, [], 1));
+        meas_func.Phit = @(z) reshape(Phit(z), sqrt(N), sqrt(N));
+        A  = @(z) Phi( z );
+        At = @(z) Phit(z );
+
+        vid2(:, :, kk) = 2*(vid{kk}/255 - 0.5); % Renormalize to [-1, 1]
+        vid3(:, :, kk) = meas_func.Phi(vid2(:, :, kk)) + sqrt(noise_var)*randn(M, 1);
+        MEAS_FUN{kk} = meas_func;
+    end
+    clear vid
+    end
+
+    
+    %% BPDN Reconstruction
+    if calc_l1 == 1
+        lambda_val = 0.01;
+        [vid_coef_cs, vid_recon_cs, vid_rMSE_cs, vid_PSNR_cs] = ...
+               BPDN_video(vid3, MEAS_FUN, lambda_val, TOL, DWTfunc, vid2);
+    end
+
+    %% RWL1 Reconstruction
+    if calc_rwl1 == 1
+        lambda_val = 0.001;
+        rwl1_reg = 0.1;
+        rwl1_mult = 0.05;
+        [vid_coef_rwcs, vid_recon_rwcs, vid_rMSE_rwcs, vid_PSNR_rwcs] = ...
+              RWL1_video(vid3, MEAS_FUN, [lambda_val, rwl1_reg, rwl1_mult], ...
+              TOL, DWTfunc, vid2);
+    end
+
+    %% BPDN-DF Reconstruction
+    if calc_dl1 == 1
+        param_vals.lambda_val = 0.01;
+        param_vals.lambda_history = 0.4;
+        param_vals.tol = TOL;
+        [vid_coef_dcs, vid_recon_dcs, vid_rMSE_dcs, vid_PSNR_dcs] = ...
+            BPDN_DF_video(vid3, MEAS_FUN, DYN_FUN, DWTfunc, param_vals, vid2);
+    end
+    
+    %% RWL1-DF Reconstruction
+    if calc_drwl1 == 1
+        param_vals.lambda_val = 0.001;
+        param_vals.rwl1_reg = 0.2;
+        param_vals.rwl1_mult = 0.4;
+        param_vals.beta = 1;
+        param_vals.tol = TOL;
+        [vid_coef_drw, vid_recon_drw, vid_rMSE_drw, vid_PSNR_drw] = ...
+            RWL1_DF_largescale(vid3, MEAS_FUN, DYN_FUN, DWTfunc, param_vals, vid2);
+    end
+    
+    %% Aggregate the results:
+    PSNR_ALL(:, :, trial_index) = [vid_PSNR_cs(:), vid_PSNR_rwcs(:), vid_PSNR_dcs(:), vid_PSNR_drw(:)];
+    rMSE_ALL(:, :, trial_index) = [vid_rMSE_cs(:), vid_rMSE_rwcs(:), vid_rMSE_dcs(:), vid_rMSE_drw(:)];
+
+end
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Plotting
+
+alg_names = {'BPDN', 'RWL1', 'BPDN-DF', 'RWL1-DF'};
+bin_cents = linspace(min(min(rMSE_ALL)), max(max(rMSE_ALL)), 30);
+
+% Time plot
+line_style_list = {':b', '-g', '-.r', '--c'};
+line_style_list2 = {'.b', '.g', '.r', '.c'};
+color_style_list = {'b', 'g', 'r', 'c'};
+
+figure, hold on;
+for kk = 1:4
+    plot(mean(rMSE_ALL(:, kk), 3), line_style_list{kk}, 'LineWidth', 3)
+end
+box on
+legend('Independent BPDN', 'Independent rw-BPDN', 'Dynamic BPDN', 'Dynamic rw-BPDN')
+set(gca, 'FontSize', 18, 'Xlim', [1,size(rMSE_ALL, 1)])
+xlabel('Frame Number', 'FontSize', 22)
+ylabel('Mean rMSE', 'FontSize', 22)
+
+% Histogram plot
+FULL_MEANS = mean(mean(rMSE_ALL, 3), 1);
+FULL_MEDIANS = median(mean(rMSE_ALL, 3), 1);
+FIG_HEIGHT = 150;
+Y_LIMS_PER1 = [35, 55, 35,60];
+alg_names = {'BPDN', 'RWL1', 'BPDN-DF', 'RWL1-DF'};
+bin_cents = linspace(min(min(rMSE_ALL)), max(max(rMSE_ALL)), 30);
+figure;
+for kk = 1:4
+    subplot(2, 2, kk), hold on
+    hist(mean(rMSE_ALL(:, kk, :), 3), bin_cents)
+    line([FULL_MEANS(kk), FULL_MEANS(kk)], [0, FIG_HEIGHT], 'LineStyle', ...
+        '--', 'LineWidth', 3, 'Color', [0,0,0])
+    box on
+    title(alg_names{kk}, 'FontSize', 24)
+    set(gca, 'FontSize', 20, 'YLim', [0, Y_LIMS_PER1(kk)], ...
+        'XLim', [0, 0.065], 'XTick', [0.02,0.04,0.06])
+    xlabel('rMSE', 'FontSize', 24)
+    axis square
+    plotarrow('Start', [FULL_MEDIANS(kk), -15*Y_LIMS_PER1(kk)/150], 'Stop', ...
+        [FULL_MEDIANS(kk), 0], 'Length', 4, 'BaseAngle', 85, ...
+        'TipAngle', 35, 'Width', 3)
+    hold off
+end
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
