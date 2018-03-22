@@ -16,40 +16,55 @@
 %  Ztilde = [Rtilde, Psitilde, Ltilde]  (p x 3p x F)
 
 
-function [S,L,info] = lvsglasso_admm(Psi,lambdaPsi,lambdaL,debugPlot)
+function [out] = lvsglasso_admm(Shat,lambdaPsi,lambdaL,opts)
 
+% ***Pay careful attention to lambdaPsi (regularization) vs. LambdaPsi
+% (dual variable)***
   
-  % --- user defined parameters ---
-  maxiter = 20;
-  mu = 1; % TODO
-  mu_dim_factor = 0.001; % TODO
+
 
   
   % --- initialize ---
+  % --- user defined parameters ---
   if nargin < 4
-    debugPlot = false;
+      maxiter = 20;
+      mu = 1; % TODO
+      mu_dim_factor = 0.001; % TODO
+      debugPlot = false;
+  else
+      maxiter = opts.maxiter;
+      mu = opts.mu; % TODO
+      mu_dim_factor = opts.mu_dim_factor; % TODO
+      debugPlot = opts.debugPlot;     
   end
-  [p,~,F] = size(Psi);
+  ABSTOL   = 1e-5;
+  RELTOL   = 1e-5;
+  [p,~,F] = size(Shat);
   pos = @(X) double(X>0) .* X;
   normsAdotij = @(A) sqrt(sum(A,3));
   terminate = false;
-  i = 0;
-  Psi_k = Psi;
-  R_k = zeros(p,p,F);
+  iter = 0;
+  
+  R_k = repmat(eye(p), 1, 1, F);
+  Psi_k = Shat;
   L_k = zeros(p,p,F);
-  Rtilde_k = zeros(p,p,F);
+  
+  Rtilde_k = R_k;
+  Psitilde_k  = Psi_k;
+  Ltilde_k    = L_k;
+  
   LambdaR_k = zeros(p,p,F);
   LambdaPsi_k = zeros(p,p,F);
   LambdaL_k = zeros(p,p,F);
   Lambda_k = zeros(p,3*p,F);
   Z_k = zeros(p,3*p,F);
   Ztilde_k = zeros(p,3*p,F);
-
+  eigR_k = zeros(p,F);
 
   while ~terminate
 
 
-    fprintf('LVSGLASSO-ADMM: iteration %d of %d...\n', i+1, maxiter);
+    fprintf('LVSGLASSO-ADMM: iteration %d of %d...\n', iter+1, maxiter);
     
     
     % --- update primals (Z = [R[.], Psi[.], L[.]]) ---
@@ -57,27 +72,34 @@ function [S,L,info] = lvsglasso_admm(Psi,lambdaPsi,lambdaL,debugPlot)
     % (22): update R
     R_k1 = zeros(p,p,F);
     for f = 1:F
-      [U,V] = eig(mu*Psi_k(:,:,f) - Rtilde_k(:,:,f) - mu*LambdaR_k(:,:,f));
+      [U,V] = eig(mu*Shat(:,:,f) - Rtilde_k(:,:,f) - mu*LambdaR_k(:,:,f));
       v = diag(V);
       Vbar = 1/2*diag(-v + sqrt(v.^2 + 4/mu));
       R_k1(:,:,f) = U*Vbar*U.';
+      eigR_k(:, f) = diag(Vbar);
     end
     % (23): update L
     L_k1 = zeros(p,p,F);
     for f = 1:F
       [U,V] = eig(L_k(:,:,f));
       v = diag(V);
+%       definition according to foti et al 2016 ref [7]
+%       vbar = soft_shrink(v, lambdaL*mu);
       vbar = max(v - lambdaL*mu, 0);
+
       Vbar = diag(vbar);
       L_k1(:,:,f) = U*Vbar*U.';
     end
-    % (24): update Psi TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
-    % TODO - verify with foti et al 2016 ref [7]
+    % (24): update Psi - foti et al 2016 ref [7] - eq 3.16
     Psi_k1 = zeros(p,p,F);
+    A = Psi_k + mu*LambdaPsi_k;
+    
     for f = 1:F
-      A = Psi_k + mu*LambdaPsi_k;
-      Psi_k1(:,:,f) = pos((1-lambdaPsi*mu)./normsAdotij(A)) .* A(:,:,f);
+      % For off-diagonal entries   
+      Psi_k1(:,:,f) = pos(1-((lambdaPsi*mu)./normsAdotij(A))).* A(:,:,f);
     end
+    % For on-diagonal entries 
+    Psi_k1(logical(repmat(eye(p), 1, 1, F))) =  A(logical(repmat(eye(p), 1, 1, F)));
 
 
     % --- update duals (Ztilde = [Rtilde[.], PsiTilde[.], Ltilde[.]]) ---
@@ -98,38 +120,38 @@ function [S,L,info] = lvsglasso_admm(Psi,lambdaPsi,lambdaL,debugPlot)
     % --- update splitting variable (Lambda) ---
     Z_k1 = [R_k1, Psi_k1, L_k1];
     Ztilde_k1    = [Rtilde_k1, Psitilde_k1, Ltilde_k1];
-    Lambda_k1    = Lambda_k - (Z_k1 - Ztilde_k1) / mu;
+    Lambda_k1    = Lambda_k - ((Z_k1 - Ztilde_k1) / mu);
     LambdaR_k1   = Lambda_k1(:,1:p,:);
     LambdaPsi_k1 = Lambda_k1(:,p+1:2*p,:);
     LambdaL_k1   = Lambda_k1(:,2*p+1:end,:);
 
 
     % --- check convergence ---
-    i = i + 1;
+    iter = iter + 1;
     % update mu
     mu = mu - mu_dim_factor; % see foti et al. 2016 ref [15]
     % calculate primal/dual residuals
     r_k = sum(R_k - Psi_k + L_k,3);
     s_k = Ztilde_k1 - Ztilde_k;
     % (15) update epsilon
-    %Z_k1_norms = sqrt(sum(sum(Z_k.^2,1),2)); % TODO Z_k or Z_k1?
-    %Ztilde_k1_norms = sqrt(sum(sum(Z_k1.^2,1),2)); % TODO Ztilde_k or Ztilde_k1?
-    %Lambda_k1_norms = sqrt(sum(sum(Lambda_k1.^2,1),2)); % TODO Lambda_k or Lambda_k1
-    %epri = sqrt(p^2*F)*eabs + erel*sum(max(Z_k1_norms,Ztilde_k1_norms));
-    %edual = sqrt(p^2*F)*eabs + erel*sum(Lambda_k1_norms);
+    Z_k1_norms = sqrt(sum(sum(Z_k.^2,1),2)); % TODO Z_k or Z_k1?
+    Ztilde_k1_norms = sqrt(sum(sum(Z_k1.^2,1),2)); % TODO Ztilde_k or Ztilde_k1?
+    Lambda_k1_norms = sqrt(sum(sum(Lambda_k1.^2,1),2)); % TODO Lambda_k or Lambda_k1
+    epri = sqrt(p^2*F)*ABSTOL + RELTOL*sum(max(Z_k1_norms,Ztilde_k1_norms));
+    edual = sqrt(p^2*F)*ABSTOL + RELTOL*sum(Lambda_k1_norms);
     % check convergence
-    terminate = i > maxiter;% || (norm(r_k) < epri && norm(s_k) < edual);
+    terminate = iter > maxiter || (norm(r_k(:)) < epri && norm(s_k(:)) < edual);
 
     
     % --- debug plot ---
     if debugPlot
-      S = R_k + L_k;
-      L = L_k;
       clf;
-      subplot(211); imagesc(abs(S(:,:,floor(F/2)))); axis image;
-      title(sprintf('Iteration %d',i));
-      subplot(212); imagesc(abs(L(:,:,floor(F/2)))); axis image;
+      history.objval(iter) =  objective(R_k, Shat, eigR_k, Psi_k, L_k,lambdaPsi, lambdaL);
+      subplot(211); imagesc(abs(Psi_k(:,:,floor(F/2)))); axis image;
+      title(sprintf('Iteration %d',iter));
+      subplot(212); imagesc(abs(L_k(:,:,floor(F/2)))); axis image;
       drawnow;
+      
     end
     
     
@@ -150,10 +172,21 @@ function [S,L,info] = lvsglasso_admm(Psi,lambdaPsi,lambdaL,debugPlot)
   end
 
   
-  % --- outputs ---
-  info.niter = i;
-  L = L_k;
-  S = R_k + L_k;
-  
-  
+  % --- outputs ---   
+  out.L = L_k;
+  out.S = Psi_k;
+  out.obj = objective(R_k,Shat,eigR_k,Psi_k, L,lambdaPsi, lambdaL);
+  out.history = history;
+end
+
+function obj = objective(R,Shat,eigR,Psi, L,lambdaPsi, lambdaL)
+obj = 0; 
+for ii = 1:size(R, 3)
+    obj = obj + sum(sum(R(:,:,ii).*Shat(:,:,ii))) - sum(log(eigR(:,ii))) ...
+        + lambdaPsi*sum(sum(abs(Psi(:,:,ii)))) + lambdaL*trace(L(:,:,ii));
+end
+end
+
+function x = soft_shrink(z,tau)
+x = sign(z).*max(abs(z)-tau,0);
 end
