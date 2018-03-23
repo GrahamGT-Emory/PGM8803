@@ -64,7 +64,7 @@ function [out] = lvsglasso_admm(Shat,lambdaPsi,lambdaL,opts)
   while ~terminate
 
 
-    fprintf('LVSGLASSO-ADMM: iteration %d of %d...\n', iter+1, maxiter);
+%     fprintf('LVSGLASSO-ADMM: iteration %d of %d...\n', iter+1, maxiter);
     
     
     % --- update primals (Z = [R[.], Psi[.], L[.]]) ---
@@ -72,24 +72,30 @@ function [out] = lvsglasso_admm(Shat,lambdaPsi,lambdaL,opts)
     % (22): update R
     R_k1 = zeros(p,p,F);
     for f = 1:F
-      [U,V] = eig(mu*Shat(:,:,f) - Rtilde_k(:,:,f) - mu*LambdaR_k(:,:,f));
+      tmp = mu*Shat(:,:,f) - Rtilde_k(:,:,f) - mu*LambdaR_k(:,:,f); tmp = (tmp + tmp') / 2;
+      [U,V] = eig(tmp);
       v = diag(V);
       Vbar = 1/2*diag(-v + sqrt(v.^2 + 4/mu));
-      R_k1(:,:,f) = U*Vbar*U.';
+      tmp = U*Vbar*U'; tmp = (tmp + tmp') / 2;
+      R_k1(:,:,f) = tmp;
       eigR_k(:, f) = diag(Vbar);
     end
+    
     % (23): update L
     L_k1 = zeros(p,p,F);
+    
     for f = 1:F
-      [U,V] = eig(L_k(:,:,f));
+      tmp = Ltilde_k(:,:,f) + mu*LambdaL_k(:,:,f); tmp = (tmp + tmp.') / 2; 
+      [U,V] = eig(tmp);
       v = diag(V);
 %       definition according to foti et al 2016 ref [7]
 %       vbar = soft_shrink(v, lambdaL*mu);
       vbar = max(v - lambdaL*mu, 0);
-
       Vbar = diag(vbar);
-      L_k1(:,:,f) = U*Vbar*U.';
+      tmp = U*Vbar*U.'; tmp = (tmp + tmp') / 2; 
+      L_k1(:,:,f) = tmp;
     end
+    
     % (24): update Psi - foti et al 2016 ref [7] - eq 3.16
     Psi_k1 = zeros(p,p,F);
     A = Psi_k + mu*LambdaPsi_k;
@@ -101,7 +107,6 @@ function [out] = lvsglasso_admm(Shat,lambdaPsi,lambdaL,opts)
     % For on-diagonal entries 
     Psi_k1(logical(repmat(eye(p), 1, 1, F))) =  A(logical(repmat(eye(p), 1, 1, F)));
 
-
     % --- update duals (Ztilde = [Rtilde[.], PsiTilde[.], Ltilde[.]]) ---
 
     % (25-27): calculate Rbar, PsiBar, Lbar
@@ -109,12 +114,13 @@ function [out] = lvsglasso_admm(Shat,lambdaPsi,lambdaL,opts)
     Psibar_k = Psi_k1 - mu*LambdaPsi_k;
     Lbar_k = L_k1 - mu*LambdaL_k;
 
+    Gamma = -(Rbar_k - Psibar_k + Lbar_k) / 3;
     % (28): update Rtilde
-    Rtilde_k1 = Rbar_k - (Rbar_k - Psibar_k + Lbar_k) / 3;
+    Rtilde_k1 = Rbar_k + Gamma ;
     % (29): update Psitilde
-    Psitilde_k1 = Psibar_k - (Rbar_k + Psibar_k + Lbar_k) / 3;
+    Psitilde_k1 = Psibar_k - Gamma;
     % (30): update Ltilde
-    Ltilde_k1 = Lbar_k - (Rbar_k - Psibar_k + Lbar_k) / 3;
+    Ltilde_k1 = Lbar_k + Gamma;
 
 
     % --- update splitting variable (Lambda) ---
@@ -135,23 +141,24 @@ function [out] = lvsglasso_admm(Shat,lambdaPsi,lambdaL,opts)
     s_k = Ztilde_k1 - Ztilde_k;
     % (15) update epsilon
     Z_k1_norms = sqrt(sum(sum(Z_k.^2,1),2)); % TODO Z_k or Z_k1?
-    Ztilde_k1_norms = sqrt(sum(sum(Z_k1.^2,1),2)); % TODO Ztilde_k or Ztilde_k1?
+    Ztilde_k1_norms = sqrt(sum(sum(Ztilde_k1.^2,1),2)); % TODO Ztilde_k or Ztilde_k1?
     Lambda_k1_norms = sqrt(sum(sum(Lambda_k1.^2,1),2)); % TODO Lambda_k or Lambda_k1
     epri = sqrt(p^2*F)*ABSTOL + RELTOL*sum(max(Z_k1_norms,Ztilde_k1_norms));
     edual = sqrt(p^2*F)*ABSTOL + RELTOL*sum(Lambda_k1_norms);
     % check convergence
     terminate = iter > maxiter || (norm(r_k(:)) < epri && norm(s_k(:)) < edual);
-
-    
+    history.eps_pri(iter) =  epri;
+    history.eps_dual(iter) =  edual;
+    history.r_norm(iter) =  norm(r_k(:));
+    history.s_norm(iter) =  norm(s_k(:));
+    history.objval(iter) =  objective(R_k, Shat, eigR_k, Psi_k, L_k,lambdaPsi, lambdaL);
     % --- debug plot ---
     if debugPlot
       clf;
-      history.objval(iter) =  objective(R_k, Shat, eigR_k, Psi_k, L_k,lambdaPsi, lambdaL);
       subplot(211); imagesc(abs(Psi_k(:,:,floor(F/2)))); axis image;
       title(sprintf('Iteration %d',iter));
       subplot(212); imagesc(abs(L_k(:,:,floor(F/2)))); axis image;
       drawnow;
-      
     end
     
     
@@ -175,7 +182,7 @@ function [out] = lvsglasso_admm(Shat,lambdaPsi,lambdaL,opts)
   % --- outputs ---   
   out.L = L_k;
   out.S = Psi_k;
-  out.obj = objective(R_k,Shat,eigR_k,Psi_k, L,lambdaPsi, lambdaL);
+  out.obj = objective(R_k,Shat,eigR_k,Psi_k, L_k,lambdaPsi, lambdaL);
   out.history = history;
 end
 
