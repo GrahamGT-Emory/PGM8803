@@ -44,12 +44,14 @@ D = zeros(r,r);
 for i = 1:r
     for j = 1:r
         if i==j     
-            D(i,j) = randn/5+.5;
+            D(i,j) = randn;
         end
     end
 end            % done
 
 Astar = [A B; C D];
+Astar = Astar / max(eig(Astar));
+
 
 
 %% Theirs
