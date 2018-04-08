@@ -91,13 +91,17 @@ end
 %% --- lvsglasso run ---
 F = 60;
 windowSize = 10;
-%Shat = calculateSpectralDensity(XU(:,1:num_samples),F);
-[S_hat] = cpsd(XU(1:end,1:num_samples)',[XU(1:end,1:num_samples)' zeros(1, num_samples)'],windowSize ,[],F);
-S_hat(:, :, end) = [];
-S_hat = permute(S_hat,[2 3 1]);
+spectralDensity = 'compute';
+if strcmpi(spectralDensity,'compute')
+  S_hat = calculateSpectralDensity(XU(:,1:num_samples),F);
+elseif strcmpi(spectralDensity,'matlab')
+  [S_hat] = cpsd(XU(1:end,1:num_samples)',[XU(1:end,1:num_samples)' zeros(1, num_samples)'],windowSize ,[],F);
+  S_hat(:, :, end) = [];
+  S_hat = permute(S_hat,[2 3 1]);
+end
 S_inv = zeros(size(S_hat));
 for f = 1:size(S_hat,3)
-   S_inv(:,:,f) = inv(S_hat(:,:,f));
+  S_inv(:,:,f) = inv(S_hat(:,:,f));
 end
 threshold_spectral = quantile(abs(real(S_inv(:))),[0.90]);
 [f1_score] = evaluateGraph(~all(abs(real(S_inv(1:p,1:p,:))) < threshold_spectral,3), targets);
@@ -108,8 +112,8 @@ opts_lvsglasso.maxiter = 100; opts_lvsglasso.stoptol = 1e-5; opts_lvsglasso.over
 
 % opts_lvsglasso.maxiter = 100; opts_lvsglasso.mu = num_samples; opts_lvsglasso.mu_dim_factor = 1/4;
 % opts_lvsglasso.debugPlot = false; opts_lvsglasso.over_relax_par = 1.6; 
-params_lvsglasso.alpha_sweep = logspace(0,2.4,2);
-params_lvsglasso.beta_sweep = logspace(-1,3,2);
+params_lvsglasso.alpha_sweep = 10^1.2;%logspace(0,2.4,2);
+params_lvsglasso.beta_sweep = 10;%logspace(-1,3,2);
 opts.debugPlot = false;
 lvs_history = [];
 
@@ -118,10 +122,10 @@ for ia = 1:length(params_lvsglasso.alpha_sweep)
     alpha = params_lvsglasso.alpha_sweep(ia);
     beta = params_lvsglasso.beta_sweep(ib);
     % --- solve with lvsglasso ---
-    out_LVS = lvsglasso_admm_2(Shat,alpha,beta,opts_lvsglasso);
+    out_LVS = lvsglasso_admm_2(S_hat,alpha,beta,opts_lvsglasso);
     S_lvs = out_LVS.S;  L_lvs = out_LVS.L; 
     info_lvsglasso = struct();  info_lvsglasso.obj = out_LVS.obj;
-    [f1_score] = evaluateGraph(~all(abs(real(S_lvs)) < threshold,3), targets);
+    %[f1_score] = evaluateGraph(~all(abs(real(S_lvs)) < threshold,3), targets);
     
     % Create struct
     meta_data = struct();
@@ -141,25 +145,27 @@ end
 
 %% Plot results
 
-close all;
+clf;
 subplot 221
-G = graph(abs(S(1:p,1:p)) > threshold,'OmitSelfLoops');
+S_true = 1/2*(S(1:p,1:p)+S(1:p,1:p)');
+G = graph(abs(S_sym(1:p,1:p)) > threshold,'OmitSelfLoops');
 plot(G,'','NodeLabel',{});
-title('True Graph')
+title('True Graph');
 
 subplot 222
 bic_lv = log(num_samples)*length(lv_history) - 2*log([lv_history.obj]);
 [bestLVVal, loc] = max([lv_history.f1]);
-G = graph(abs(lv_history(loc).S) > threshold,'OmitSelfLoops');
+S_best = lv_history(loc).S;
+G = graph(abs(S_best) > 0.01*threshold,'OmitSelfLoops');
 plot(G,'','NodeLabel',{});
-title('LV-Glasso')
+title('LV-Glasso');
 
 subplot 223
 bic_lvs = log(num_samples)*length(lvs_history) - 2*log([lvs_history.obj]);
 [~, loc] = max([lvs_history.f1]);
-G = graph(~all(abs(real(S_lvs)) < threshold,3),'OmitSelfLoops');
+G = graph(~all(abs(real(S_lvs)) < 0.01*threshold,3),'OmitSelfLoops');
 plot(G,'','NodeLabel',{});
-title('LVS-Glasso')
+title('LVS-Glasso');
 
 
 

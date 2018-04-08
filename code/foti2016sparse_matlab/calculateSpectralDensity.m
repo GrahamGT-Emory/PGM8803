@@ -10,29 +10,26 @@ function Psi = calculateSpectralDensity(X,nf,ww)
 %          - Psi[f]      is Psi(:,:,f)
 %          - Psi[.]_{ij} is Psi(i,j,:)
 
-% --- parse inputs ---
-[p,T] = size(X);
-if nargin < 2
-  nf = T;
-end
-if nargin < 3
-  ww = hann(round(nf));
-end
-
-
-% --- calculate DFTs ---
-D = (1/sqrt(T))*fft(X,nf,2);
-
-
-% --- calculate smoothed periodogram ---
-Psi = zeros(p,p,nf);
-for i = 1:p
-  for j = 1:p
-     st = squeeze(D(i,:) .* conj(D(j,:)))./(2*pi);
-     st = conv(st, ww/sum(ww),'same');
-     Psi(i,j,:) = reshape(st, [1 1 nf]);
+  % --- parse inputs ---
+  [p,T] = size(X);
+  if nargin < 2
+    nf = T;
   end
-end
+  if nargin < 3
+    ww = hann(round(nf));
+  end
 
+  % --- calculate DFTs ---
+  D = (1/sqrt(T))*fft(X,nf,2);
+
+  % --- calculate smoothed periodogram ---
+  Psi = zeros(p,p,nf);
+  for i = 1:p
+    for j = 1:p
+       st = squeeze(D(i,:) .* conj(D(j,:)))./(2*pi);
+       st = conv(st, ww/sum(ww),'same');
+       Psi(i,j,:) = reshape(st, [1 1 nf]);
+    end
+  end
 
 end

@@ -33,8 +33,8 @@
 % 2012 - Ming Yuan Georgia Tech, section 6.1 - 36-cycle, 2 latent variables
 clc; clear;
 addpath('../ma2013admlvglasso_matlab/');
-p = 198;
-h = 2;
+p = 50;
+h = 5;
 S = eye(p+h);
 r = 0.2;
 % p random locations on a 1x1 square
@@ -81,10 +81,19 @@ for ii = (p+1):(p+h)
 end
 
 C = inv(S);
-n = round(0.6*(p.^2)); % from meinshausen 2006, pg 1449
+n = 100*round(0.6*(p.^2)); % from meinshausen 2006, pg 1449
 % X is [p x n] synthetic data
-X = (randn(n, p) * chol(C(1:p,1:p)))'; 
+X = (randn(n, p) * chol(C(1:p,1:p)))';
+XU = (randn(n, p+h) * chol(C))';
 threshold = 1e-9;
+
+%% remove this cell
+specden = calculateSpectralDensity(XU,16,ones(1,16));
+subplot(311); imagesc(abs(S)); title('actual');
+subplot(312); imagesc(sum(abs(specden),3)); title('mean,3 of specden');
+subplot(313); imagesc(all(abs(specden)>10^-5.2,3)); title('thresholded');
+
+
 
 %% Optimization
 
