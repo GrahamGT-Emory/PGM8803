@@ -1,1 +1,0 @@
-% spectral graphical lasso (foti et al. 2016, sec 2)

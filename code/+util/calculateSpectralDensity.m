@@ -17,15 +17,16 @@ function [fk,df] = calculateSpectralDensity(X,print)
     
 
   % --- calculate DFTs ---
-  D = zeros(nf,m);
-  for i = 1:m
-    for k = 1:T
-      wk = 2*pi*(k-1)/T;
-      D(k,i) = 1/sqrt(T)*sum(X(:,i).*exp(-1j*wk*(0:T-1).'));
-    end
-  end
-  D2 = (1/sqrt(T))*fft(X,nf);
-  assert(norm(D - D2, 'fro') < 1e-9);
+  % (manual method -- this is equivalent to the normalized fft below)
+  %D = zeros(nf,m);
+  %for i = 1:m
+  %  for k = 1:T
+  %    wk = 2*pi*(k-1)/T;
+  %    D(k,i) = 1/sqrt(T)*sum(X(:,i).*exp(-1j*wk*(0:T-1).'));
+  %  end
+  %end
+  D = (1/sqrt(T))*fft(X,nf);
+  %assert(norm(D - D2, 'fro') < 1e-6);
 
 
   % --- calculate periodogram ---
@@ -97,7 +98,7 @@ function [fk,df] = calculateSpectralDensity(X,print)
 
   % --- subsample the smoothed periodogram ---
   H = 4*T/(r*sqrt(2*pi));
-  subsamp_factor = round(T/H);
+  subsamp_factor = round(H); %round(T/H); -- matt fixed 04/11/18
   if print
     fprintf(' -> Optimal subsampling factor: %d.\n', subsamp_factor);
   end
