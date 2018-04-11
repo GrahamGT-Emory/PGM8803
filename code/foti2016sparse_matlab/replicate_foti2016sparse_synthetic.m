@@ -55,17 +55,16 @@ for i = 1:size(fk,3)
   invfk(:,:,i) = inv(fk(:,:,i));
 end
 fk = permute(fk,[3 1 2]);
-invfk = permute(fk,[3 1 2]);
-save('lvsglasso_inputs','fk','invfk');
+invfk = permute(invfk,[3 1 2]);
+save('lvsglasso_inputs','fk','invfk','A','B','C','D');
+fprintf('Saved results to lvsglasso_inputs.mat\n');
 
 
-% %% visualize estimated spectral density matrix
-% fkinv = zeros(size(fk));
-% for i = 1:size(fk,3)
-%   fkinv(:,:,i) = inv(fk(:,:,i));
-% end
-% 
-% 
+%% visualize inverse estimated spectral density matrix
+sum_invfk = squeeze(abs(sum(invfk,1)));
+
+
+%%
 % %% --- lvglasso run ---
 % params_lvglasso.alpha_sweep = 0.1;%logspace(-1,0,2);
 % params_lvglasso.beta_sweep = 1000;%logspace(-1,3,2);

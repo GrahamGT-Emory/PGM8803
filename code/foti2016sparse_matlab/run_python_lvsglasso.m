@@ -6,8 +6,8 @@ end
 
 cd(mcodepath);
 load('lvsglasso_inputs.mat');
-lamS = 5e-4;
-lamL = 1e-3;
+lamS = 2e-3;
+lamL = 3e-3;
 save('lvsglasso_inputs.mat','fk','lamS','lamL');
 copyfile('lvsglasso_inputs.mat',fullfile(pycodepath,'lvsglasso_inputs.mat'));
 
@@ -47,8 +47,16 @@ end
 %%
 clf;
 sumS = squeeze(sum(S,1));
-imagesc(abs(sumS));
+sumSnodiag = sumS - diag(diag(sumS));
+subplot(211);
+imagesc(abs(sumSnodiag));
 title({'S (sum down freq dimension)', ...
   sprintf('||sumS||_0 = %d',sum(abs(Si(:))>1e-3))});
 set(gca,'fontsize',16);
 axis image; colorbar;
+subplot(212);
+imagesc(A);
+title('true conditional dependencies');
+axis image; colorbar;
+set(gca,'fontsize',16);
+
