@@ -6,9 +6,9 @@ end
 
 cd(mcodepath);
 load('lvsglasso_inputs.mat');
-lamS = 5e-4;
-lamL = 1e-3;
-save('lvsglasso_inputs.mat','fk','lamS','lamL');
+lamS = 2e-3;
+lamL = 3e-3;
+save('lvsglasso_inputs.mat','fk','invfk','lamS','lamL');
 copyfile('lvsglasso_inputs.mat',fullfile(pycodepath,'lvsglasso_inputs.mat'));
 
 cd(pycodepath);
@@ -27,7 +27,7 @@ for i = 1:size(S,1)
   Si = squeeze(S(i,:,:));
   Li = squeeze(L(i,:,:));
   subplot(211);
-  imagesc(abs(Si));
+  imagesc(abs(Si)); colorbar;
   title({'Recovered sparse component', ...
     sprintf('(frame %d -- ||S_i||_0 = %d)',i,sum(abs(Si(:))>1e-3))});
   set(gca,'fontsize',16); axis image;
@@ -46,9 +46,17 @@ end
 
 %%
 clf;
-sumS = squeeze(sum(S,1));
-imagesc(abs(sumS));
-title({'S (sum down freq dimension)', ...
-  sprintf('||sumS||_0 = %d',sum(abs(Si(:))>1e-3))});
+allS = squeeze(all(abs(S) > 1e-3,1));
+sumS = squeeze(sum(S(13,:,:),1));
+sumSnodiag = sumS - diag(diag(sumS));
+subplot(211);
+imagesc(allS);
+title(sprintf('K_Y (||K_Y||_0 = %d)',sum(allS(:))));
 set(gca,'fontsize',16);
-axis image; colorbar;
+axis image;
+subplot(212);
+imagesc(A);
+title('A');
+axis image;
+set(gca,'fontsize',16);
+
